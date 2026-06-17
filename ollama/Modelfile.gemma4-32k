@@ -1,0 +1,7 @@
+# Modelfile for gemma4:27b with 32k context window
+# Usage: ollama create gemma4-32k -f ./Modelfile.gemma4-32k
+
+FROM gemma4:26b
+
+# Set context window to 32768 tokens (32k)
+PARAMETER num_ctx 32768
