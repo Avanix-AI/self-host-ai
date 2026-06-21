@@ -45,7 +45,8 @@ setup_ollama_model() {
 generate_api_key() {
     print_header "Step 2: Generating API Key"
 
-    GENERATED_KEY="sk-$(openssl rand -hex 32)"
+    # Use kalix- prefix instead of sk- to avoid Cloudflare WAF flagging
+    GENERATED_KEY="kalix-$(openssl rand -hex 32)"
     echo "🔑 Generated API key: $GENERATED_KEY"
     echo ""
     echo "⚠️  Save this key! It will be added to the nginx config."
@@ -95,8 +96,8 @@ setup_nginx() {
 
     # Copy and configure API keys
     cp "$SCRIPT_DIR/nginx/api-keys.conf" "$NGINX_DIR/api-keys.conf"
-    # Add the generated key
-    echo "\"Bearer $GENERATED_KEY\" 1;" >> "$NGINX_DIR/api-keys.conf"
+    # Add the generated key (raw value, no "Bearer " prefix)
+    echo "\"$GENERATED_KEY\" 1;" >> "$NGINX_DIR/api-keys.conf"
     echo "   ✅ API key added to $NGINX_DIR/api-keys.conf"
 
     # Copy site config
@@ -157,14 +158,25 @@ test_setup() {
     fi
 
     echo ""
-    echo "🔍 Testing with API key (should succeed)..."
-    WITH_AUTH=$(curl -s -o /dev/null -w "%{http_code}" \
+    echo "🔍 Testing with X-Token header (should succeed)..."
+    WITH_XTOKEN=$(curl -s -o /dev/null -w "%{http_code}" \
+        -H "X-Token: $GENERATED_KEY" \
+        http://localhost:8080/api/tags 2>/dev/null || echo "000")
+    if [ "$WITH_XTOKEN" = "200" ]; then
+        echo "   ✅ X-Token auth passed (200 OK)"
+    else
+        echo "   ⚠️  Got $WITH_XTOKEN instead of 200 (X-Token)"
+    fi
+
+    echo ""
+    echo "🔍 Testing with Authorization: Bearer header (should succeed)..."
+    WITH_BEARER=$(curl -s -o /dev/null -w "%{http_code}" \
         -H "Authorization: Bearer $GENERATED_KEY" \
         http://localhost:8080/api/tags 2>/dev/null || echo "000")
-    if [ "$WITH_AUTH" = "200" ]; then
-        echo "   ✅ Authenticated request passed (200 OK)"
+    if [ "$WITH_BEARER" = "200" ]; then
+        echo "   ✅ Bearer auth passed (200 OK)"
     else
-        echo "   ⚠️  Got $WITH_AUTH instead of 200"
+        echo "   ⚠️  Got $WITH_BEARER instead of 200 (Bearer)"
     fi
 }
 
@@ -203,10 +215,14 @@ print_summary() {
     echo "   cloudflared tunnel --url http://localhost:8080"
     echo ""
     echo "🔒 To add more API keys:"
-    echo "   1. Generate: openssl rand -hex 32"
+    echo "   1. Generate: openssl rand -hex 32 | sed 's/^/kalix-/'"
     echo "   2. Add to: /etc/nginx/api-keys.conf"
-    echo "      Format: \"Bearer sk-<your-key>\" 1;"
+    echo "      Format: \"kalix-<your-key>\" 1;  (raw key, no Bearer prefix)"
     echo "   3. Reload: sudo nginx -s reload"
+    echo ""
+    echo "📝 Supported auth methods:"
+    echo "   X-Token: $GENERATED_KEY           (preferred, bypasses Cloudflare WAF)"
+    echo "   Authorization: Bearer $GENERATED_KEY  (for OpenAI-compatible clients)"
 }
 
 # ── Main ──
