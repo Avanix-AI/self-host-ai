@@ -1,0 +1,33 @@
+[Unit]
+Description=Ollama Cloudflare Tunnel (nginx + cloudflared)
+Documentation=https://github.com/kalix-vn/self-host-ai
+# Start after network is up and nginx is ready
+After=network-online.target nginx.service
+Wants=network-online.target
+# If nginx is managed by systemd, depend on it
+# Comment out the next line if nginx is not a systemd service
+BindsTo=nginx.service
+
+[Service]
+Type=simple
+# Run as the current user (set in install.sh via User= substitution)
+User=SERVICE_USER_PLACEHOLDER
+
+# The start script
+ExecStart=/bin/bash SERVICE_SCRIPT_PLACEHOLDER
+
+# Restart on failure, with 10s delay
+Restart=on-failure
+RestartSec=10
+
+# Logging — also written inside start-tunnel.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ollama-tunnel
+
+# Environment — add Homebrew/local bin to PATH
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+# Enable for current user's login session
+WantedBy=default.target

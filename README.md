@@ -107,24 +107,97 @@ cloudflared tunnel route dns ollama-api api.yourdomain.com
 cloudflared tunnel run ollama-api
 ```
 
+Lệnh mình hay dùng
+```
+cloudflared tunnel run --url http://localhost:8080 --no-chunked-encoding mac-ollama
+```
+
+
+
 > **Security notes:**
 > - All traffic goes through Cloudflare's network (DDoS protection included)
 > - API key is required for all requests (except `/health`)
 > - Rate limiting is configured at 10 req/s per IP with burst of 20
 > - Ollama only listens on 127.0.0.1 — never exposed directly
 
+## Auto-start on Login
+
+Chạy một lần để cài đặt auto-start, sau đó tunnel sẽ tự bật mỗi lần đăng nhập.
+
+### macOS (LaunchAgent)
+
+```bash
+bash autostart/macos/install.sh
+```
+
+| Lệnh | Mô tả |
+|------|---------|
+| `launchctl list \| grep ollama-tunnel` | Xem trạng thái |
+| `tail -f ~/.local/log/ollama-tunnel/tunnel.log` | Xem log |
+| `launchctl stop com.kalix.ollama-tunnel` | Dừng |
+| `launchctl start com.kalix.ollama-tunnel` | Khởi động lại |
+| `bash autostart/macos/uninstall.sh` | Gỡ bỏ |
+
+### Linux (systemd user service)
+
+```bash
+bash autostart/linux/install.sh
+```
+
+| Lệnh | Mô tả |
+|------|---------|
+| `systemctl --user status ollama-tunnel` | Xem trạng thái |
+| `journalctl --user -u ollama-tunnel -f` | Xem log (systemd) |
+| `tail -f ~/.local/log/ollama-tunnel/tunnel.log` | Xem log (file) |
+| `systemctl --user stop ollama-tunnel` | Dừng |
+| `systemctl --user start ollama-tunnel` | Khởi động lại |
+| `bash autostart/linux/uninstall.sh` | Gỡ bỏ |
+
+> **Headless server**: Chạy thêm `sudo loginctl enable-linger $USER` để service chạy không cần đăng nhập.
+
+### Windows (Task Scheduler)
+
+Mở PowerShell và chạy:
+
+```powershell
+.\autostart\windows\install.ps1
+```
+
+| Lệnh | Mô tả |
+|------|---------|
+| `Get-ScheduledTask -TaskPath '\Kalix\'` | Xem trạng thái |
+| `Get-Content ~\.local\log\ollama-tunnel\tunnel.log -Tail 50 -Wait` | Xem log |
+| `Stop-ScheduledTask -TaskPath '\Kalix\' -TaskName 'OllamaTunnel'` | Dừng |
+| `Start-ScheduledTask -TaskPath '\Kalix\' -TaskName 'OllamaTunnel'` | Khởi động lại |
+| `.\autostart\windows\uninstall.ps1` | Gỡ bỏ |
+
 ## File Structure
 
 ```
 self-host-ai/
 ├── README.md
-├── setup.sh              # Automated setup script
+├── setup.sh                        # Setup script (macOS/Linux)
+├── nginx/                          # Nginx config (shared across OS)
+│   ├── nginx.conf                  # Reverse proxy config
+│   ├── ollama-map.conf             # API key validation map
+│   └── api-keys.conf               # Allowed API keys
 ├── ollama/
-│   └── Modelfile.gemma4-32k   # Ollama model with 32k context
-└── nginx/
-    ├── nginx.conf         # Nginx site config (reverse proxy)
-    ├── ollama-map.conf    # Map block for API key validation
-    └── api-keys.conf      # API keys (Bearer tokens)
+│   └── Modelfile.gemma4-32k        # Custom model (32k context)
+└── autostart/                      # Auto-start scripts per OS
+    ├── macos/                      # macOS → LaunchAgent
+    │   ├── start-tunnel.sh         # Startup script
+    │   ├── com.kalix.ollama-tunnel.plist  # LaunchAgent template
+    │   ├── install.sh              # Install auto-start
+    │   └── uninstall.sh            # Remove auto-start
+    ├── linux/                      # Linux → systemd user service
+    │   ├── start-tunnel.sh         # Startup script
+    │   ├── ollama-tunnel.service    # systemd unit file template
+    │   ├── install.sh              # Install auto-start
+    │   └── uninstall.sh            # Remove auto-start
+    └── windows/                    # Windows → Task Scheduler
+        ├── start-tunnel.ps1        # Startup script (PowerShell)
+        ├── install.ps1             # Install auto-start
+        └── uninstall.ps1           # Remove auto-start
 ```
 
 ## Configuration
